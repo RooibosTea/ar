@@ -1,16 +1,312 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
     <script src="https://aframe.io/releases/1.8.0/aframe.min.js"></script>
+
+    <style>
+
+        /*ポップアップのデザインに関して一部AI使いました*/
+        #planet-popup {
+            position: fixed;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            width: 360px;
+            max-width: 90vw;
+            padding: 20px 25px;
+            background: rgba(0, 0, 0, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.7);
+            border-radius: 20px;
+            color: white;
+            text-align: center;
+            font-family: Arial, sans-serif;
+            z-index: 9999;
+            display: none;
+            box-shadow: 0 0 30px rgba(255, 255, 255, 0.25), 0 0 50px rgba(80, 150, 255, 0.2);
+            backdrop-filter: blur(8px);
+        }
+
+        #planet-popup h2 {
+            margin: 0 0 8px;
+            font-size: 26px;
+        }
+
+        #planet-popup p {
+            margin: 0 0 15px;
+            color: #ddd;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        #close-popup {
+            padding: 8px 22px;
+            border: none;
+            border-radius: 15px;
+            background: white;
+            color: black;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        #close-popup:hover {
+            background: #ddd;
+        }
+
+        canvas {
+            cursor: pointer;
+        }
+    </style>
+
+    <script>
+        let currentFocused = null;
+
+        const planetInfo = {
+            Mercury: { name: "水星", description: "太陽に最も近い惑星。非常に高温になります。" },
+            Venus: { name: "金星", description: "厚い大気に覆われた、太陽系で最も高温な惑星です。" },
+            Earth: { name: "地球", description: "私たちが暮らす惑星。液体の水と生命が存在します。" },
+            Mars: { name: "火星", description: "赤い惑星として知られ、将来の有人探査が研究されています。" },
+            Jupiter: { name: "木星", description: "太陽系最大の惑星。巨大なガス惑星です。" },
+            Saturn: { name: "土星", description: "美しいリングを持つ巨大なガス惑星です。" },
+            Uranus: { name: "天王星", description: "大きく傾いた自転軸を持つ巨大氷惑星です。" },
+            Neptune: { name: "海王星", description: "太陽系の外側を回る青い巨大氷惑星です。" },
+            Pluto: { name: "冥王星", description: "太陽系外縁部にある準惑星です。" }
+        };
+
+
+        //やり方はAIに聞きました
+        AFRAME.registerComponent('planet', {
+            schema: {
+                distance: { type: 'number', default: 5 },
+                orbitSpeed: { type: 'number', default: 1 },
+                rotationSpeed: { type: 'number', default: 2 },
+                initialAngle: { type: 'number', default: 0 },
+                name: { type: 'string', default: '' }
+            },
+
+            init: function () {
+                this.angle = this.data.initialAngle;
+                this.isFocused = false;
+                const el = this.el;
+
+                
+                el.addEventListener('click', (evt) => {
+                    evt.stopPropagation();
+                    if (currentFocused === el) {
+                        resetFocus();
+                    } else {
+                        focusPlanet(el);
+                    }
+                });
+
+            //この考え方も聞いてます
+                el.addEventListener('mouseenter', () => {
+                    if (!this.isFocused) {
+                        el.setAttribute('animation__hover', 'property: scale; to: 1.15 1.15 1.15; dur: 150');
+                    }
+                });
+
+                el.addEventListener('mouseleave', () => {
+                    if (!this.isFocused) {
+                        el.setAttribute('animation__hover', 'property: scale; to: 1 1 1; dur: 150');
+                    }
+                });
+            },
+
+            tick: function (time, delta) {
+                const dt = delta / 1000;
+
+
+                if (this.isFocused) {
+                    this.el.object3D.position.set(0, 2, 25);
+                    this.el.object3D.rotation.y += 0.4 * dt;
+                    return;
+                }
+
+
+                //このあたりはコードも手伝ってもらってます
+                this.angle += this.data.orbitSpeed * dt;
+                const x = Math.cos(this.angle) * this.data.distance;
+                const z = Math.sin(this.angle) * this.data.distance;
+
+                this.el.object3D.position.set(x, 0, z);
+                this.el.object3D.rotation.y += this.data.rotationSpeed * dt;
+            }
+        });
+
+
+        function focusPlanet(el) {
+            if (currentFocused) {
+                resetFocus();
+            }
+
+            const comp = el.components.planet;
+            if (!comp) return;
+
+            comp.isFocused = true;
+            currentFocused = el;
+
+            el.setAttribute('scale', '3 3 3');
+
+
+            const planetName = comp.data.name;
+            const info = planetInfo[planetName];
+
+            if (info) {
+                document.getElementById('planet-name').textContent = info.name;
+                document.getElementById('planet-description').textContent = info.description;
+            }
+
+            document.getElementById('planet-popup').style.display = 'block';
+        }
+
+
+        function resetFocus() {
+            if (!currentFocused) return;
+
+            const comp = currentFocused.components.planet;
+            if (comp) {
+                comp.isFocused = false;
+            }
+
+            currentFocused.setAttribute('scale', '1 1 1');
+            currentFocused = null;
+
+
+            document.getElementById('planet-popup').style.display = 'none';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('close-popup').addEventListener('click', resetFocus);
+        });
+    </script>
 </head>
 
 <body>
-    <a-scene>
-        <a-box position="0 0 -3" color="skyblue">
-        </a-box>
+    <div id="planet-popup">
+        <h2 id="planet-name">惑星</h2>
+        <p id="planet-description">惑星の説明</p>
+        <button id="close-popup">閉じる</button>
+    </div>
+
+    <a-scene background="color: #000000">
+
+        <a-assets>
+            <img id="sunTexture" src="../assets/sun.jpg">
+            <img id="spaceTexture" src="../assets/space.jpg">
+            <img id="mercuryTexture" src="../assets/mercury.jpg">
+            <img id="venusTexture" src="../assets/venus.jpg">
+            <img id="earthTexture" src="../assets/earth.jpg">
+            <img id="marsTexture" src="../assets/mars.jpg">
+            <img id="jupiterTexture" src="../assets/jupiter.jpg">
+            <img id="saturnTexture" src="../assets/saturn.jpg">
+            <img id="uranusTexture" src="../assets/uranus.jpg">
+            <img id="neptuneTexture" src="../assets/neptune.jpg">
+            <img id="plutoTexture" src="../assets/pluto.jpg">
+        </a-assets>
+
+
+        <a-sky src="#spaceTexture" material="shader: flat;"></a-sky>
+
+        <a-sphere 
+        position="0 0 0"
+        radius="8"
+        material="src: #sunTexture;
+        shader: flat;"></a-sphere>
+
+        <a-light type="point" position="0 0 0" intensity="3" distance="200"></a-light>
+
+
+        
+        <a-sphere 
+        planet="distance: 14;
+        orbitSpeed: 0.6;
+        rotationSpeed: 0.8;
+        initialAngle: 0;
+        name: Mercury"
+        radius="1.3" material="src: #mercuryTexture; shader: flat;"></a-sphere>
+
+        <a-sphere planet="distance: 20;
+        orbitSpeed: 0.5;
+        rotationSpeed: 0.5;
+        initialAngle: 0;
+        name: Venus"
+        radius="2.0"
+        material="src: #venusTexture;
+        shader: flat;"></a-sphere>
+        
+        <a-sphere planet="distance: 27;
+        orbitSpeed: 0.4;
+        rotationSpeed: 0.7;
+        initialAngle: 0;
+        name: Earth"
+        radius="2.3" material="src: #earthTexture; shader: flat;"></a-sphere>
+        
+        <a-sphere planet="distance: 34;
+        orbitSpeed: 0.33;
+        rotationSpeed: 0.6;
+        initialAngle: 0;
+        name: Mars"
+        radius="1.6" material="src: #marsTexture; shader: flat;"></a-sphere>
+        
+        <a-sphere 
+        planet="distance: 44;
+        orbitSpeed: 0.25;
+        rotationSpeed: 0.4;
+        initialAngle: 0;
+        name: Jupiter"
+        radius="5.5" material="src: #jupiterTexture; shader: flat;"></a-sphere>
+
+        <a-entity 
+        planet="distance: 56;
+        orbitSpeed: 0.2;
+        rotationSpeed: 0.3;
+        initialAngle: 0;
+        name: Saturn">
+            <a-sphere 
+            radius="4.5" 
+            material="src: #saturnTexture;
+            shader: flat;"></a-sphere>
+            <a-ring 
+            rotation="90 0 0"
+            radius-inner="5.5"
+            radius-outer="8.5"
+            color="#b8a070"
+            material="shader: flat;"></a-ring>
+        </a-entity>
+
+        <a-sphere 
+        planet="distance: 68;
+        orbitSpeed: 0.15;
+        rotationSpeed: 0.25;
+        initialAngle: 0;
+        name: Uranus"
+        radius="3.2" material="src: #uranusTexture; shader: flat;"></a-sphere>
+
+        <a-sphere planet="distance: 80;
+        orbitSpeed: 0.12;
+        rotationSpeed: 0.2;
+        initialAngle: 0;
+        name: Neptune"
+        radius="3.0" material="src: #neptuneTexture; shader: flat;"></a-sphere>
+
+        <a-sphere 
+        planet="distance: 90;
+        orbitSpeed: 0.09;
+        rotationSpeed: 0.15;
+        initialAngle: 0;
+        name: Pluto"
+        radius="1.1" material="src: #plutoTexture; shader: flat;"></a-sphere>
+
+        <a-camera 
+        position="0 15 45"
+        look-at="0 0 0"
+        cursor="rayOrigin: mouse"
+        raycaster="objects: [planet], a-entity[planet]">
+        </a-camera>
     </a-scene>
 </body>
 
