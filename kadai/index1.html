@@ -1,0 +1,195 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.6.0/dist/aframe-extras.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/projapayuri/aframe-gesture-hands@v0.9.2/aframe-gesture-hands.js"></script>
+    <style>
+        body { margin: 0; }
+        #hud { position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 999;
+            background: black;
+            color: white;
+            padding: 12px; 
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">能力：<span id="status">待機中</span></div>
+
+    <a-scene hands id="scene" vr-mode-ui="enabled: false">
+
+
+        <a-entity hand-anchor="hand: right; index: 5; orientation: finger">
+            <a-gltf-model id="rightGun"
+            src="../assets/gun.glb"
+            position="0 -1 0"
+            rotation="0 180 90"
+            scale="1.5 1. 1.5"
+            visible="false"></a-gltf-model>
+        </a-entity>
+
+
+        <a-entity hand-anchor="hand: left; index: 5; orientation: finger">
+            <a-gltf-model id="leftGun" 
+            src="../assets/gun.glb"
+            position="0 -1 0"
+            rotation="180 -180 -90"
+            scale="1.5 1.5 1.5"
+            visible="false"></a-gltf-model>
+        </a-entity>
+
+
+        <a-entity hand-anchor="hand: right; index: 9">
+            <a-gltf-model id="rightMagic"
+            src="../assets/c_cyan.glb"
+            animation-mixer="clip: MagicCircle_Loop"
+            rotation="90 0 0"
+            scale="2 2 2"
+            visible="false"></a-gltf-model>
+        </a-entity>
+
+        <a-entity hand-anchor="hand: left; index: 9">
+            <a-gltf-model id="leftMagic"
+            src="../assets/c_violet.glb"
+            animation-mixer="clip: MagicCircle_Loop"
+            rotation="90 0 0"
+            scale="2 2 2"
+            visible="false"></a-gltf-model>
+        </a-entity>
+
+
+        <a-entity id="robot"
+        position="0 -3 -3"
+        visible="false"
+        animation="property: position; from: 0 -3 -3; to: 0 -0.9 -3;
+        dur: 1500; startEvents: summon; easing: easeOutCubic">
+            <a-gltf-model src="../assets/robot.glb"
+                scale="0.7 0.7 0.7"></a-gltf-model>
+        </a-entity>
+
+        <a-camera position="0 0 0"></a-camera>
+    </a-scene>
+
+    <script>
+        const scene = document.getElementById("scene");
+        const status = document.getElementById("status");
+        const robot = document.getElementById("robot");
+        const ids = ["rightGun", "leftGun", "rightMagic", "leftMagic"];
+
+        let mode = "", side = "", summoned = false, resetHeld = false;
+
+        function distance(a, b) {
+            return Math.hypot(a.x - b.x, a.y - b.y);
+        }
+
+        function fist(f) {
+            return f && !f.thumb && !f.index && !f.middle &&
+                   !f.ring && !f.pinky;
+        }
+
+        function hide() {
+            ids.forEach(id => document.getElementById(id).setAttribute("visible", false));
+        }
+
+        function reset() {
+            mode = "";
+            side = "";
+            summoned = false;
+            hide();
+            robot.setAttribute("visible", false);
+            robot.setAttribute("position", "0 -3 -3");
+            status.textContent = "リセット";
+        }
+
+        function show(next, handSide) {
+            if (mode === next && side === handSide) return;
+
+            mode = next;
+            side = handSide;
+            hide();
+
+            if (next === "gun" || next === "magic") {
+                const id = handSide + (next === "gun" ? "Gun" : "Magic");
+                document.getElementById(id).setAttribute("visible", true);
+            }
+
+            status.textContent = {
+                gun: "銃",
+                magic: "魔法陣"
+            }[next] || "待機中";
+        }
+
+        function checkHands(event) {
+            const hands = event.detail.hands || [];
+
+            const resetPose = hands.some(h => {
+                const f = h.fingers;
+                return f && f.thumb && f.index &&
+                       !f.middle && !f.ring && f.pinky;
+            });
+
+            if (resetPose) {
+                if (!resetHeld) reset();
+                resetHeld = true;
+                return;
+            }
+            resetHeld = false;
+
+
+            if (hands.length >= 2) {
+                const a = hands[0], b = hands[1];
+
+                if (fist(a.fingers) && fist(b.fingers) &&
+                    a.landmarks && b.landmarks &&
+                    distance(a.landmarks[9], b.landmarks[9]) <
+                    distance(a.landmarks[5], a.landmarks[17]) * 1.5) {
+
+                    if (!summoned) {
+                        summoned = true;
+                        hide();
+                        mode = "robot";
+                        side = "";
+                        robot.setAttribute("position", "0 -3 -3");
+                        robot.setAttribute("visible", true);
+                        robot.emit("summon");
+                        status.textContent = "ロボット召喚";
+                    }
+                    return;
+                }
+            }
+
+
+            for (const h of hands) {
+                const f = h.fingers;
+                const handSide = (h.handedness || "").toLowerCase();
+                if (!f || !["left", "right"].includes(handSide)) continue;
+
+
+                if (f.thumb && f.index && f.middle && f.ring && f.pinky) {
+                    show("magic", handSide);
+                    return;
+                }
+
+
+                if (f.thumb && f.index &&
+                    !f.middle && !f.ring && !f.pinky) {
+                    show("gun", handSide);
+                    return;
+                }
+            }
+
+            if (mode !== "robot") show("", "");
+        }
+
+        scene.addEventListener("hand-result", checkHands);
+    </script>
+</body>
+</html>
